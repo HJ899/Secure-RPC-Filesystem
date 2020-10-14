@@ -10,7 +10,7 @@ key_dict = {}
 
 
 class KDCServer(rpyc.Service):
-    class ExposedKDC:
+    class exposed_KDC:
         @staticmethod
         def get_session_key(obj):
             alice = obj["server"]
