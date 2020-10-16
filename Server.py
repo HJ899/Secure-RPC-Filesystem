@@ -95,9 +95,7 @@ class MasterServer(rpyc.Service):
         @staticmethod
         def list_dir(node_id, enc_dir):
             if node_id not in ds_registry:
-                return -1
-            if not len(fs_registry):
-                return 0
+                return -2
             session_key = ds_registry[node_id]["key"]
             dec_dir = decrypt(session_key, enc_dir, False)
             filenames = []
@@ -114,6 +112,47 @@ class MasterServer(rpyc.Service):
                 except:
                     pass
             return encrypt_obj((filenames, dirnames), session_key, False)
+
+        @staticmethod
+        def change_dir(node_id, enc_dir):
+            if node_id not in ds_registry:
+                return -2
+            session_key = ds_registry[node_id]["key"]
+            dec_dir = decrypt(session_key, enc_dir, False)
+            for fs in fs_registry:
+                send_dir = encrypt(fs_registry[fs]["key"], dec_dir, False)
+                try:
+                    dcon = rpyc.connect(fs_registry[fs]["ip"], fs_registry[fs]["port"])
+                    fs_server = dcon.root.FS()
+                    enc_exists = fs_server.dir_exists(send_dir)
+                    dec_exists = decrypt(fs_registry[fs]["key"], enc_exists, False)
+                    if dec_exists == "True":
+                        return encrypt(session_key, "True", False)
+                except:
+                    pass
+            return encrypt(session_key, "False", False)
+
+        @staticmethod
+        def cat_file(node_id, enc_path):
+            if node_id not in ds_registry:
+                return -2
+            session_key = ds_registry[node_id]["key"]
+            dec_path = decrypt(session_key, enc_path, False)
+            for fs in fs_registry:
+                send_path = encrypt(fs_registry[fs]["key"], dec_path, False)
+                try:
+                    dcon = rpyc.connect(fs_registry[fs]["ip"], fs_registry[fs]["port"])
+                    fs_server = dcon.root.FS()
+                    enc_path_exists = fs_server.file_exists(send_path)
+                    dec_exists = decrypt(fs_registry[fs]["key"], enc_path_exists, False)
+                    if dec_exists == "True":
+                        port_ftp = int(fs_registry[fs]["port"]) + 1
+                        ip_ftp = fs_registry[fs]["ip"]
+                        return encrypt_obj((ip_ftp, port_ftp), session_key, False)
+                except:
+                    pass
+            return False
+
 
 if __name__ == "__main__":
     t = ThreadedServer(MasterServer, hostname=IP, port=PORT, protocol_config={'allow_public_attrs': True})
