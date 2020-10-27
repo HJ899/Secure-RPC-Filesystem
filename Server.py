@@ -4,10 +4,7 @@ import os
 import json
 from rpyc.utils.server import ThreadedServer
 from rpyc.lib import setup_logger
-from cryputils import encrypt
-from cryputils import encrypt_obj
-from cryputils import decrypt
-from cryputils import decrypt_obj
+from cryputils import *
 
 ds_registry = {}
 fs_registry = {}
@@ -19,7 +16,6 @@ SERVER_ID = "m_server"
 
 IP = "127.0.0.1"
 PORT = 7487
-
 
 class MasterServer(rpyc.Service):
     class exposed_Server:

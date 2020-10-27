@@ -1,9 +1,6 @@
 import os
-
 from Node import Node
-from cryputils import decrypt_obj
-from cryputils import encrypt
-from cryputils import decrypt
+from cryputils import *
 import rpyc
 from rpyc.lib import setup_logger
 from rpyc.utils.server import ThreadedServer
@@ -20,11 +17,9 @@ SESSION_KEY = None
 
 COMMANDS = ['upload', 'cat', 'cd', 'cp', 'ls', 'pwd']
 
-
 def is_port_in_use(port_num):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(('localhost', port_num)) == 0
-
 
 def parse_dir(parse_path: str):
     split_string = parse_path.split('/')
@@ -40,7 +35,6 @@ def parse_dir(parse_path: str):
                 return -1
     return '/' + '/'.join(stack)
 
-
 def read_ftp_file(ftp: ftplib.FTP, file_path):
     temp = tempfile.TemporaryFile()
     try:
@@ -55,14 +49,12 @@ def read_ftp_file(ftp: ftplib.FTP, file_path):
         print(error)
         return -1
 
-
 class DSListener(rpyc.Service):
     @staticmethod
     def exposed_print(enc_msg):
         # dec_msg = decrypt(SESSION_KEY, enc_msg, False)
         dec_msg = enc_msg
         print(dec_msg)
-
 
 class DSClient:
     def __init__(self, id, pwd):
