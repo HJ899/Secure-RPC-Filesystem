@@ -51,6 +51,13 @@ class FSServer(rpyc.Service):
                 return encrypt(SESSION_KEY, "True", False)
             else:
                 return encrypt(SESSION_KEY, "False", False)
+        
+        @staticmethod
+        def get_file_count():
+            file_count = 0
+            for (root, dirs, files) in os.walk(ROOT_PATH):
+                file_count += len(files)
+            return encrypt(SESSION_KEY, str(file_count), False)
 
 if __name__ == "__main__":
     id = input("Enter your id: ")

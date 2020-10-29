@@ -148,7 +148,28 @@ class MasterServer(rpyc.Service):
                 except:
                     pass
             return False
+        
+        @staticmethod
+        def get_server_to_upload_to(node_id, enc_path):
+            if node_id not in ds_registry:
+                return -2
+            session_key = ds_registry[node_id]["key"]
+            dec_path = decrypt(session_key, enc_path, False)
 
+            for fs in fs_registry:
+                send_path = encrypt(fs_registry[fs]["key"], dec_path, False)
+                try:
+                    dcon = rpyc.connect(fs_registry[fs]["ip"], fs_registry[fs]["port"])
+                    fs_server = dcon.root.FS()
+                    enc_path_exists = fs_server.dir_exists(send_path)
+                    dec_exists = decrypt(fs_registry[fs]["key"], enc_path_exists, False)
+                    if dec_exists == "True":
+                        port_ftp = int(fs_registry[fs]["port"]) + 1
+                        ip_ftp = fs_registry[fs]["ip"]
+                        return encrypt_obj((ip_ftp, port_ftp), session_key, False)
+                except:
+                    pass
+            return False
 
 if __name__ == "__main__":
     t = ThreadedServer(MasterServer, hostname=IP, port=PORT, protocol_config={'allow_public_attrs': True})

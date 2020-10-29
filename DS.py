@@ -38,7 +38,7 @@ def parse_dir(parse_path: str):
 def read_ftp_file(ftp: ftplib.FTP, file_path):
     temp = tempfile.TemporaryFile()
     try:
-        print("Starting file read...")
+        print("Starting file read...", file_path)
         ftp.retrbinary("RETR " + file_path, temp.write, 1024)
         temp.seek(0)
         file_contents = temp.read()
@@ -46,6 +46,16 @@ def read_ftp_file(ftp: ftplib.FTP, file_path):
         return file_contents
     except ftplib.all_errors as error:
         temp.close()
+        print(error)
+        return -1
+
+def upload_ftp_file(ftp: ftplib.FTP, file_path, current_dir):
+    try:
+        print("Uploading file...")
+        save_dir = os.path.join(current_dir[1:], file_path.split('/')[-1])
+        ftp.storbinary("STOR "+ save_dir, open(file_path, 'rb'))
+        return 200
+    except ftplib.all_errors as error:
         print(error)
         return -1
 
@@ -71,11 +81,18 @@ class DSClient:
             ftp = ftplib.FTP('')
             ftp.connect(ftp_host, ftp_port)
             ftp.login(self.id, self.pwd)
+            #print("FTP PWD", ftp.pwd())
+            #print("FTP DIR", ftp.dir())
             if option == 3:
                 file_contents = read_ftp_file(ftp, file_path)
                 if file_contents == -1:
                     return -1
                 return file_contents
+            if option == 2:
+                result = upload_ftp_file(ftp, file_path, self.current_dir)
+                if result == -1:
+                    return -1
+                return 200
         except ftplib.all_errors as error:
             print(error)
             return -1
@@ -153,6 +170,28 @@ class DSClient:
                                 print("\n" + display_contents + "\n")
                             else:
                                 print("Error occurred during FTP")
+                elif command[0] == 'upload':
+                    print('Files on your system:')
+                    client_path = 'ds_files'
+                    client_files = os.listdir(client_path)
+
+                    for file in client_files:
+                        print(file)
+                    
+                    filename = input('Enter file name to upload to current directory - ' + self.current_dir + ' : ')
+                    while filename not in client_files:
+                        filename = input('File not found, please enter a valid file name: ')
+                    
+                    client_file_path = os.path.join(client_path, filename)
+                    enc_path = encrypt(SESSION_KEY, self.current_dir, False)
+                    enc_ip_port = master.get_server_to_upload_to(self.id, enc_path)
+                    ftp_ip, ftp_port = decrypt_obj(enc_ip_port, SESSION_KEY, False)
+                    ftp_result = self.do_ftp(ftp_ip, ftp_port, client_file_path, 2)
+                    if ftp_result != -1:
+                        print(filename, " successfully uploaded to", self.current_dir)
+                    else:
+                        print("Error occurred during FTP")
+
             else:
                 print("Please enter a valid command")
 
