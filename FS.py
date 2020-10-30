@@ -1,9 +1,6 @@
 import rpyc
 from rpyc.utils.server import ThreadedServer
-from cryputils import decrypt_obj
-from cryputils import encrypt_obj
-from cryputils import encrypt
-from cryputils import decrypt
+from cryputils import *
 import os
 from Node import Node
 import socket
@@ -13,11 +10,9 @@ from multiprocessing import Process
 SESSION_KEY = None
 ROOT_PATH = None
 
-
 def is_port_in_use(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(('localhost', port)) == 0
-
 
 class FSServer(rpyc.Service):
     class exposed_FS:
@@ -56,19 +51,26 @@ class FSServer(rpyc.Service):
                 return encrypt(SESSION_KEY, "True", False)
             else:
                 return encrypt(SESSION_KEY, "False", False)
-
+        
+        @staticmethod
+        def get_file_count():
+            file_count = 0
+            for (root, dirs, files) in os.walk(ROOT_PATH):
+                file_count += len(files)
+            return encrypt(SESSION_KEY, str(file_count), False)
 
 if __name__ == "__main__":
     id = input("Enter your id: ")
-    pwd = input("Enter your pwd: ")
+    pwd = getpass.getpass('Password: ')
     port = int(input("Enter port: "))
     while is_port_in_use(port) or is_port_in_use(port + 1):
         port = int(input("Ports already in use. Please enter another: "))
+
     node = Node(id, pwd, "fs", port=port)
     isConnect = node.connect_to_master()
     while not isConnect:
         id = input("Enter your id: ")
-        pwd = input("Enter your pwd: ")
+        pwd = getpass.getpass('Password: ')
         node.ID = id
         node.PWD = pwd
         isConnect = node.connect_to_master()

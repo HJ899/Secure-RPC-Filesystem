@@ -1,14 +1,10 @@
 import random
 import rpyc
-from cryputils import decrypt_obj
-from cryputils import decrypt
-from cryputils import encrypt
-from cryputils import encrypt_obj
+from cryputils import *
 
 MASTER_IP = "127.0.0.1"
 MASTER_PORT = 7487
 MASTER_ID = "m_server"
-
 
 class Node:
     def __init__(self, id="ds_1", pwd="pwd1", node_type="ds", ip="127.0.0.1", port=38913):

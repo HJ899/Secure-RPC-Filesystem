@@ -3,7 +3,6 @@ from pyftpdlib.handlers import FTPHandler
 from pyftpdlib.servers import ThreadedFTPServer
 import json
 
-
 def start_server(home_dir, port):
     host = '127.0.0.1'
     authorizer = DummyAuthorizer()

@@ -4,10 +4,7 @@ import os
 import json
 from rpyc.utils.server import ThreadedServer
 from rpyc.lib import setup_logger
-from cryputils import encrypt
-from cryputils import encrypt_obj
-from cryputils import decrypt
-from cryputils import decrypt_obj
+from cryputils import *
 
 ds_registry = {}
 fs_registry = {}
@@ -19,7 +16,6 @@ SERVER_ID = "m_server"
 
 IP = "127.0.0.1"
 PORT = 7487
-
 
 class MasterServer(rpyc.Service):
     class exposed_Server:
@@ -152,7 +148,74 @@ class MasterServer(rpyc.Service):
                 except:
                     pass
             return False
+        
+        @staticmethod
+        def get_server_to_upload_to(node_id, enc_path):
+            if node_id not in ds_registry:
+                return -2
+            session_key = ds_registry[node_id]["key"]
+            dec_path = decrypt(session_key, enc_path, False)
 
+            for fs in fs_registry:
+                send_path = encrypt(fs_registry[fs]["key"], dec_path, False)
+                try:
+                    dcon = rpyc.connect(fs_registry[fs]["ip"], fs_registry[fs]["port"])
+                    fs_server = dcon.root.FS()
+                    enc_path_exists = fs_server.dir_exists(send_path)
+                    dec_exists = decrypt(fs_registry[fs]["key"], enc_path_exists, False)
+                    if dec_exists == "True":
+                        port_ftp = int(fs_registry[fs]["port"]) + 1
+                        ip_ftp = fs_registry[fs]["ip"]
+                        return encrypt_obj((ip_ftp, port_ftp), session_key, False)
+                except:
+                    pass
+            return False
+        
+        @staticmethod
+        def get_cp_ftp_creds(node_id, enc_paths):
+            if node_id not in ds_registry:
+                return -2
+            session_key = ds_registry[node_id]["key"]
+            source, dest = decrypt_obj(enc_paths, session_key, False)
+
+            source_ip = None
+            source_port = None
+            dest_ip = None
+            dest_port = None
+
+            for fs in fs_registry:
+                send_path = encrypt(fs_registry[fs]["key"], source, False)
+                try:
+                    dcon = rpyc.connect(fs_registry[fs]["ip"], fs_registry[fs]["port"])
+                    fs_server = dcon.root.FS()
+                    enc_path_exists = fs_server.file_exists(send_path)
+                    dec_exists = decrypt(fs_registry[fs]["key"], enc_path_exists, False)
+                    if dec_exists == "True":
+                        source_port = int(fs_registry[fs]["port"]) + 1
+                        source_ip = fs_registry[fs]["ip"]
+                        break
+                except:
+                    pass
+            
+            for fs in fs_registry:
+                send_path = encrypt(fs_registry[fs]["key"], dest, False)
+                try:
+                    dcon = rpyc.connect(fs_registry[fs]["ip"], fs_registry[fs]["port"])
+                    fs_server = dcon.root.FS()
+                    enc_path_exists = fs_server.dir_exists(send_path)
+                    dec_exists = decrypt(fs_registry[fs]["key"], enc_path_exists, False)
+                    if dec_exists == "True":
+                        dest_port = int(fs_registry[fs]["port"]) + 1
+                        dest_ip = fs_registry[fs]["ip"]
+                        break
+                except:
+                    pass
+            
+            if source_ip == None or dest_ip == None:
+                return False
+            
+            return encrypt_obj((source_ip, source_port, dest_ip, dest_port), session_key, False)
+            
 
 if __name__ == "__main__":
     t = ThreadedServer(MasterServer, hostname=IP, port=PORT, protocol_config={'allow_public_attrs': True})
