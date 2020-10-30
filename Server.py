@@ -170,6 +170,52 @@ class MasterServer(rpyc.Service):
                 except:
                     pass
             return False
+        
+        @staticmethod
+        def get_cp_ftp_creds(node_id, enc_paths):
+            if node_id not in ds_registry:
+                return -2
+            session_key = ds_registry[node_id]["key"]
+            source, dest = decrypt_obj(enc_paths, session_key, False)
+
+            source_ip = None
+            source_port = None
+            dest_ip = None
+            dest_port = None
+
+            for fs in fs_registry:
+                send_path = encrypt(fs_registry[fs]["key"], source, False)
+                try:
+                    dcon = rpyc.connect(fs_registry[fs]["ip"], fs_registry[fs]["port"])
+                    fs_server = dcon.root.FS()
+                    enc_path_exists = fs_server.file_exists(send_path)
+                    dec_exists = decrypt(fs_registry[fs]["key"], enc_path_exists, False)
+                    if dec_exists == "True":
+                        source_port = int(fs_registry[fs]["port"]) + 1
+                        source_ip = fs_registry[fs]["ip"]
+                        break
+                except:
+                    pass
+            
+            for fs in fs_registry:
+                send_path = encrypt(fs_registry[fs]["key"], dest, False)
+                try:
+                    dcon = rpyc.connect(fs_registry[fs]["ip"], fs_registry[fs]["port"])
+                    fs_server = dcon.root.FS()
+                    enc_path_exists = fs_server.dir_exists(send_path)
+                    dec_exists = decrypt(fs_registry[fs]["key"], enc_path_exists, False)
+                    if dec_exists == "True":
+                        dest_port = int(fs_registry[fs]["port"]) + 1
+                        dest_ip = fs_registry[fs]["ip"]
+                        break
+                except:
+                    pass
+            
+            if source_ip == None or dest_ip == None:
+                return False
+            
+            return encrypt_obj((source_ip, source_port, dest_ip, dest_port), session_key, False)
+            
 
 if __name__ == "__main__":
     t = ThreadedServer(MasterServer, hostname=IP, port=PORT, protocol_config={'allow_public_attrs': True})

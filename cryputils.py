@@ -45,7 +45,7 @@ def encrypt_obj(obj, key, gen_hash=True):
     msg = json.dumps(obj)
     cipher = encrypt(key, msg, gen_hash)
     return cipher
-
+    
 
 def decrypt_obj(cipher, key, gen_hash=True):
     s = decrypt(key, cipher, gen_hash)

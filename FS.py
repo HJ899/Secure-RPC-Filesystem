@@ -61,15 +61,16 @@ class FSServer(rpyc.Service):
 
 if __name__ == "__main__":
     id = input("Enter your id: ")
-    pwd = input("Enter your pwd: ")
+    pwd = getpass.getpass('Password: ')
     port = int(input("Enter port: "))
     while is_port_in_use(port) or is_port_in_use(port + 1):
         port = int(input("Ports already in use. Please enter another: "))
+
     node = Node(id, pwd, "fs", port=port)
     isConnect = node.connect_to_master()
     while not isConnect:
         id = input("Enter your id: ")
-        pwd = input("Enter your pwd: ")
+        pwd = getpass.getpass('Password: ')
         node.ID = id
         node.PWD = pwd
         isConnect = node.connect_to_master()
