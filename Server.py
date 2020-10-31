@@ -107,6 +107,8 @@ class MasterServer(rpyc.Service):
                     dirnames += dir_list[1]
                 except:
                     pass
+            filenames = list(set(filenames))
+            dirnames = list(set(dirnames))
             return encrypt_obj((filenames, dirnames), session_key, False)
 
         @staticmethod
@@ -128,6 +130,25 @@ class MasterServer(rpyc.Service):
                     pass
             return encrypt(session_key, "False", False)
 
+        @staticmethod
+        def mkdir(node_id, enc_folder):
+            if node_id not in ds_registry:
+                return -2
+            session_key = ds_registry[node_id]["key"]
+            folder_name = decrypt(session_key, enc_folder, False)
+            is_created = False
+            for fs in fs_registry:
+                send_path = encrypt(fs_registry[fs]["key"], folder_name, False)
+                try:
+                    dcon = rpyc.connect(fs_registry[fs]["ip"], fs_registry[fs]["port"])
+                    fs_server = dcon.root.FS()
+                    enc_exists = fs_server.mkdir(send_path)
+                    dec_exists = decrypt(fs_registry[fs]["key"], enc_exists, False)
+                    if dec_exists == "True":
+                        is_created = True
+                except:
+                    pass
+            return encrypt(session_key, str(is_created), False)
         @staticmethod
         def cat_file(node_id, enc_path):
             if node_id not in ds_registry:

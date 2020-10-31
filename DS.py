@@ -16,7 +16,7 @@ MASTER_PORT = 7487
 MASTER_ID = "m_server"
 SESSION_KEY = None
 
-COMMANDS = ['upload', 'cat', 'cd', 'cp', 'ls', 'pwd', 'clear']
+COMMANDS = ['upload', 'cat', 'cd', 'cp', 'ls', 'pwd', 'clear', 'mkdir']
 
 def is_port_in_use(port_num):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -50,6 +50,17 @@ def read_ftp_file(ftp: ftplib.FTP, file_path):
         print(error)
         return -1
 
+def download_ftp_file(ftp: ftplib.FTP, file_path):
+    try:
+        print("Starting file read...", file_path)
+        file_name = file_path.split('/')[-1]
+        with open('./ds_files/' + file_name, 'wb') as f:
+            ftp.retrbinary("RETR " + file_path, f.write, 1024)
+        return 200
+    except ftplib.all_errors as error:
+        print(error)
+        return -1
+
 def upload_ftp_file(ftp: ftplib.FTP, file_path, current_dir):
     try:
         print("Uploading file...")
@@ -61,15 +72,17 @@ def upload_ftp_file(ftp: ftplib.FTP, file_path, current_dir):
         return -1
 
 def cp_ftp_file(ftp_source: ftplib.FTP, source_path, ftp_dest: ftplib.FTP, dest_path):
+    temp = tempfile.TemporaryFile()
     try:
-        temp = tempfile.TemporaryFile()
         ftp_source.retrbinary("RETR " + source_path[1:], temp.write, 1024)
         temp.seek(0)
         write_dir = os.path.join(dest_path[1:], source_path.split('/')[-1])
         ftp_dest.storbinary("STOR " + write_dir, temp)
+        temp.close()
         return 200
 
     except ftplib.all_errors as error:
+        temp.close()
         print(error)
         return -1
 
@@ -87,9 +100,10 @@ class DSClient:
 
     def do_ftp(self, ftp_host, ftp_port, file_path, option, args = None):
         # options: -
-        # 1. Upload
-        # 2. Download
+        # 1. Copy
+        # 2. Upload
         # 3. Read (cat)
+        # 4. Download
         try:
             ftp = ftplib.FTP('')
             ftp.connect(ftp_host, ftp_port)
@@ -117,7 +131,11 @@ class DSClient:
                 if result == -1:
                     return -1
                 return 200
-            
+            elif option == 4:
+                result = download_ftp_file(ftp, file_path)
+                if result == -1:
+                    return -1
+                return 200
         except ftplib.all_errors as error:
             print(error)
             return -1
@@ -222,7 +240,7 @@ class DSClient:
 
                 elif command[0] == 'cp':
                     if len(command) < 3:
-                        print('usgae: cp <path-of-file-to-copy> <destination-path>')
+                        print('usage: cp <path-of-file-to-copy> <destination-path>')
                     else:
                         source = command[1]
                         if source[0] != '/':
@@ -252,7 +270,51 @@ class DSClient:
                             print('Server Error During Copying...Try again later')
                         else:
                             print('Succesfully copyied file to', destination)
-
+                elif command[0] == 'download':
+                    if len(command) == 1:
+                        print("\ndownload requires an argument -- the file to display\n")
+                    else:
+                        file_path = command[1]
+                        if file_path[0] != "/":
+                            file_path = os.path.join(self.current_dir, file_path)
+                        parsed_path = parse_dir(file_path)
+                        if parsed_path == -1:
+                            print("Path not valid")
+                            continue
+                        enc_path = encrypt(SESSION_KEY, parsed_path, False)
+                        file_exists = master.cat_file(self.id, enc_path)
+                        if not file_exists:
+                            print("Given path is not a file")
+                        elif file_exists == -1:
+                            print("No such file exists")
+                        elif file_exists == -2:
+                            print("Node not registered with Server")
+                        else:
+                            dec_obj = decrypt_obj(file_exists, SESSION_KEY, False)
+                            ftp_ip, ftp_port = dec_obj
+                            display_contents = self.do_ftp(ftp_ip, ftp_port, file_path, 3)
+                            if display_contents != -1:
+                                print("File Download Successful!")
+                            else:
+                                print("Error occurred during FTP")
+                elif command[0] == 'mkdir':
+                    if len(command) < 2:
+                        print("\nmkdir requires an argument -- the folder to create\n")
+                    else:
+                        folder_name = command[1]
+                        if folder_name[0] != "/":
+                            folder_name = os.path.join(self.current_dir, folder_name)
+                        parsed_path = parse_dir(folder_name)
+                        if parsed_path == -1:
+                            print("Invalid Name")
+                            continue
+                        enc_folder = encrypt(SESSION_KEY, parsed_path, False)
+                        enc_ret = master.mkdir(self.id, enc_folder)
+                        dec_ret = decrypt(SESSION_KEY, enc_ret, False)
+                        if dec_ret == "True":
+                            print("Folder created successfully")
+                        else:
+                            print("Unable to create folder")
                 elif command[0] == "clear":
                     os.system('clear')
             else:
