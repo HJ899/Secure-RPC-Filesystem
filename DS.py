@@ -16,7 +16,7 @@ MASTER_PORT = 7487
 MASTER_ID = "m_server"
 SESSION_KEY = None
 
-COMMANDS = ['upload', 'cat', 'cd', 'cp', 'ls', 'pwd', 'clear', 'mkdir']
+COMMANDS = ['upload', 'cat', 'cd', 'cp', 'ls', 'pwd', 'clear', 'mkdir', 'delete']
 
 def is_port_in_use(port_num):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -64,7 +64,11 @@ def download_ftp_file(ftp: ftplib.FTP, file_path):
 def upload_ftp_file(ftp: ftplib.FTP, file_path, current_dir):
     try:
         print("Uploading file...")
+        # print(file_path, current_dir)
+        # print(ftp.pwd())
+        # print(ftp.dir())
         save_dir = os.path.join(current_dir[1:], file_path.split('/')[-1])
+        #print(save_dir)
         ftp.storbinary("STOR "+ save_dir, open(file_path, 'rb'))
         return 200
     except ftplib.all_errors as error:
@@ -227,10 +231,11 @@ class DSClient:
                         filename = input('File not found, please enter a valid file name: ')
                     
                     client_file_path = os.path.join(client_path, filename)
-                    enc_path = encrypt(SESSION_KEY, self.current_dir, False)
-                    enc_ip_port = master.get_server_to_upload_to(self.id, enc_path)
+                    enc_data = encrypt(SESSION_KEY, os.path.join(self.current_dir, filename), False)
+                    enc_ip_port = master.get_server_to_upload_to(self.id, enc_data)
                     ftp_ip, ftp_port = decrypt_obj(enc_ip_port, SESSION_KEY, False)
                     ftp_result = self.do_ftp(ftp_ip, ftp_port, client_file_path, 2)
+
                     if ftp_result != -1:
                         print(filename, " successfully uploaded to", self.current_dir)
                         enc_path = encrypt(SESSION_KEY, self.current_dir, False)
@@ -297,6 +302,7 @@ class DSClient:
                                 print("File Download Successful!")
                             else:
                                 print("Error occurred during FTP")
+
                 elif command[0] == 'mkdir':
                     if len(command) < 2:
                         print("\nmkdir requires an argument -- the folder to create\n")
@@ -315,6 +321,23 @@ class DSClient:
                             print("Folder created successfully")
                         else:
                             print("Unable to create folder")
+
+                elif command[0] == 'delete':
+                    if len(command) < 2:
+                        print("Usage: delete <path_to_file>")
+                        continue
+                    else:
+                        file_path = command[1]
+                        if file_path[0] != '/':
+                            file_path = os.path.join(self.current_dir, file_path)
+                        file_path = parse_dir(file_path)
+                        enc_path = encrypt(SESSION_KEY, file_path, False)
+                        ret = master.delete_file(self.id, enc_path)
+                        if ret != False:
+                            print('Deleted Successfully!')
+                        else:
+                            print('Enter Valid File Path')
+                
                 elif command[0] == "clear":
                     os.system('clear')
             else:

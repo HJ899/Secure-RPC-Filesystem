@@ -37,7 +37,10 @@ class FSServer(rpyc.Service):
             if dec_dir[0] == '/':
                 dec_dir = dec_dir[1:]
             dir_path = os.path.join(ROOT_PATH, dec_dir)
-            os.makedirs(dir_path)
+            try:
+                os.makedirs(dir_path)
+            except:
+                return encrypt(SESSION_KEY, "False", False)
             return encrypt(SESSION_KEY, "True", False)
 
         @staticmethod
@@ -58,6 +61,18 @@ class FSServer(rpyc.Service):
                 dec_dir = dec_dir[1:]
             dir_path = os.path.join(ROOT_PATH, dec_dir)
             if os.path.exists(dir_path) and os.path.isfile(dir_path):
+                return encrypt(SESSION_KEY, "True", False)
+            else:
+                return encrypt(SESSION_KEY, "False", False)
+        
+        @staticmethod
+        def delete_file(enc_dir):
+            dec_dir = decrypt(SESSION_KEY, enc_dir, False)
+            if dec_dir[0] == '/':
+                dec_dir = dec_dir[1:]
+            dir_path = os.path.join(ROOT_PATH, dec_dir)
+            if os.path.exists(dir_path) and os.path.isfile(dir_path):
+                os.remove(dir_path)
                 return encrypt(SESSION_KEY, "True", False)
             else:
                 return encrypt(SESSION_KEY, "False", False)
