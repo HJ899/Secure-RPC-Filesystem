@@ -76,9 +76,8 @@ def cp_ftp_file(ftp_source: ftplib.FTP, source_path, ftp_dest: ftplib.FTP, dest_
 class DSListener(rpyc.Service):
     @staticmethod
     def exposed_print(enc_msg):
-        # dec_msg = decrypt(SESSION_KEY, enc_msg, False)
-        dec_msg = enc_msg
-        print(dec_msg)
+        dec_msg = decrypt(SESSION_KEY, enc_msg, False)
+        print('\n' + dec_msg)
 
 class DSClient:
     def __init__(self, id, pwd):
@@ -216,6 +215,8 @@ class DSClient:
                     ftp_result = self.do_ftp(ftp_ip, ftp_port, client_file_path, 2)
                     if ftp_result != -1:
                         print(filename, " successfully uploaded to", self.current_dir)
+                        enc_path = encrypt(SESSION_KEY, self.current_dir, False)
+                        _ = master.notify_all_clients(self.id, enc_path)
                     else:
                         print("Error occurred during FTP")
 

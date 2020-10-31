@@ -215,7 +215,22 @@ class MasterServer(rpyc.Service):
                 return False
             
             return encrypt_obj((source_ip, source_port, dest_ip, dest_port), session_key, False)
-            
+
+        @staticmethod
+        def notify_all_clients(node_id, enc_path):
+            if node_id not in ds_registry:
+                return -2
+            session_key = ds_registry[node_id]["key"]
+            dec_path = decrypt(session_key, enc_path, False)
+
+            for ds in ds_registry:
+                if ds != node_id:
+                    dcon = rpyc.connect(ds_registry[ds]["ip"], ds_registry[ds]["port"])
+                    message = "new File Uploaded to: " + dec_path
+                    enc_message = encrypt(ds_registry[ds]["key"], message, False)
+                    dcon.root.print(enc_message)
+
+            return True            
 
 if __name__ == "__main__":
     t = ThreadedServer(MasterServer, hostname=IP, port=PORT, protocol_config={'allow_public_attrs': True})

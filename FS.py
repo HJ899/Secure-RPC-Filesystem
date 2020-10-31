@@ -6,6 +6,7 @@ from Node import Node
 import socket
 import FTPServer
 from multiprocessing import Process
+import getpass
 
 SESSION_KEY = None
 ROOT_PATH = None
