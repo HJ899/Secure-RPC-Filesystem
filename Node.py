@@ -40,6 +40,7 @@ class Node:
             print("Port and IP not sent successfully")
             return False
         print("Port and IP sent successfully")
+        print("==========================================\n")
         dcon.close()
         self.master = None
         return True

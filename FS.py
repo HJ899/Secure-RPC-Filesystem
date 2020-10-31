@@ -79,10 +79,12 @@ class FSServer(rpyc.Service):
         
         @staticmethod
         def get_file_count():
-            file_count = 0
+            total_size = 0
             for (root, dirs, files) in os.walk(ROOT_PATH):
-                file_count += len(files)
-            return encrypt(SESSION_KEY, str(file_count), False)
+                for i in files:
+                    file_path = os.path.join(root, i)
+                    total_size += os.path.getsize(file_path)
+            return encrypt(SESSION_KEY, str(total_size), False)
 
 if __name__ == "__main__":
     id = input("Enter your id: ")

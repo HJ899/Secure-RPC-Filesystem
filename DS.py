@@ -10,13 +10,16 @@ import socket
 import tempfile
 import ftplib
 import getpass
+import sys
 
 MASTER_IP = "127.0.0.1"
 MASTER_PORT = 7487
 MASTER_ID = "m_server"
 SESSION_KEY = None
 
-COMMANDS = ['upload', 'cat', 'cd', 'cp', 'ls', 'pwd', 'clear', 'mkdir', 'delete']
+COMMANDS = ['upload', 'cat', 'cd', 'cp', 'ls', 'pwd', 'clear', 'mkdir', 'delete', 'download', 'exit', 'help']
+global IS_WAITING
+global WAITING_TEXT
 
 def is_port_in_use(port_num):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -47,17 +50,22 @@ def read_ftp_file(ftp: ftplib.FTP, file_path):
         return file_contents
     except ftplib.all_errors as error:
         temp.close()
+        print()
         print(error)
         return -1
 
 def download_ftp_file(ftp: ftplib.FTP, file_path):
     try:
-        print("Starting file read...", file_path)
+        print("Starting file download...", file_path)
         file_name = file_path.split('/')[-1]
-        with open('./ds_files/' + file_name, 'wb') as f:
+        if not os.path.exists('ds_files'):
+            os.mkdir('ds_files')
+        new_file_path = os.path.join('ds_files', file_name)
+        with open(new_file_path, 'wb') as f:
             ftp.retrbinary("RETR " + file_path, f.write, 1024)
         return 200
     except ftplib.all_errors as error:
+        print()
         print(error)
         return -1
 
@@ -94,7 +102,10 @@ class DSListener(rpyc.Service):
     @staticmethod
     def exposed_print(enc_msg):
         dec_msg = decrypt(SESSION_KEY, enc_msg, False)
-        print('\n' + dec_msg)
+        print('\n' + ('\n' if IS_WAITING else '') + dec_msg + "\n")
+        if IS_WAITING:
+            print(WAITING_TEXT, end='')
+            sys.stdout.flush()
 
 class DSClient:
     def __init__(self, id, pwd):
@@ -130,7 +141,6 @@ class DSClient:
                     ftp_source = ftplib.FTP('')
                     ftp_source.connect(args[0], args[1])
                     ftp_source.login(self.id, self.pwd)
-                
                 result = cp_ftp_file(ftp_source, args[2], ftp, file_path)
                 if result == -1:
                     return -1
@@ -148,7 +158,13 @@ class DSClient:
         dcon = rpyc.connect(MASTER_IP, MASTER_PORT)
         master = dcon.root.Server()
         while master:
+            global IS_WAITING
+            IS_WAITING = True
+            global WAITING_TEXT
+            WAITING_TEXT = "Enter your command: "
             command = input("Enter your command: ")
+            IS_WAITING = False
+            WAITING_TEXT = None
             command = command.split(' ')
             if command[0] in COMMANDS:
                 if command[0] == 'ls':
@@ -178,35 +194,33 @@ class DSClient:
                             # print(cd_dir)
                         cd_dir = parse_dir(cd_dir)
                         if cd_dir == -1:
-                            print("Please enter a valid path")
+                            print("\nPlease enter a valid path\n")
                             continue
                         enc_dir = encrypt(SESSION_KEY, cd_dir, False)
                         dir_exists = master.change_dir(self.id, enc_dir)
                         dir_exists = decrypt(SESSION_KEY, dir_exists, False)
                         if dir_exists == "True":
                             self.current_dir = cd_dir
-                            print("Current working directory changed to:", self.current_dir)
+                            print("\nCurrent working directory changed to: ", self.current_dir, '\n', sep='')
                         else:
-                            print("No such file or directory")
+                            print("\nNo such file or directory\n")
                 elif command[0] == 'cat':
                     if len(command) == 1:
-                        print("\ncat requires an argument -- the file to display\n")
+                        print("\nusage: cat <path-of-file-to-show>\n")
                     else:
                         file_path = command[1]
                         if file_path[0] != "/":
                             file_path = os.path.join(self.current_dir, file_path)
                         parsed_path = parse_dir(file_path)
                         if parsed_path == -1:
-                            print("Path not valid")
+                            print("\nPath not valid\n")
                             continue
                         enc_path = encrypt(SESSION_KEY, parsed_path, False)
                         file_exists = master.cat_file(self.id, enc_path)
                         if not file_exists:
-                            print("Given path is not a file")
-                        elif file_exists == -1:
-                            print("No such file exists")
+                            print("\nNo such file exists\n")
                         elif file_exists == -2:
-                            print("Node not registered with Server")
+                            print("\nNode not registered with Server\n")
                         else:
                             dec_obj = decrypt_obj(file_exists, SESSION_KEY, False)
                             ftp_ip, ftp_port = dec_obj
@@ -214,67 +228,68 @@ class DSClient:
                             if display_contents != -1:
                                 if isinstance(display_contents, bytes):
                                     display_contents = display_contents.decode('latin-1')
-                                print("\n" + display_contents + "\n")
+                                if not display_contents:
+                                    print("\nThe file is empty\n")
+                                else:
+                                    print("\n" + display_contents + "\n")
                             else:
-                                print("Error occurred during FTP")
-
+                                print("\nError occurred during FTP\n")
                 elif command[0] == 'upload':
-                    print('Files on your system:')
+                    print('\nFiles on your system:')
                     client_path = 'ds_files'
                     client_files = os.listdir(client_path)
 
                     for file in client_files:
                         print(file)
-                    
+                    print()
+                    IS_WAITING = True
+                    WAITING_TEXT = 'Enter file name to upload to current directory - ' + self.current_dir + ' : '
                     filename = input('Enter file name to upload to current directory - ' + self.current_dir + ' : ')
                     while filename not in client_files:
+                        WAITING_TEXT = 'File not found, please enter a valid file name: '
                         filename = input('File not found, please enter a valid file name: ')
-                    
+                    IS_WAITING = False
+                    WAITING_TEXT = None
                     client_file_path = os.path.join(client_path, filename)
                     enc_data = encrypt(SESSION_KEY, os.path.join(self.current_dir, filename), False)
                     enc_ip_port = master.get_server_to_upload_to(self.id, enc_data)
                     ftp_ip, ftp_port = decrypt_obj(enc_ip_port, SESSION_KEY, False)
                     ftp_result = self.do_ftp(ftp_ip, ftp_port, client_file_path, 2)
-
                     if ftp_result != -1:
-                        print(filename, " successfully uploaded to", self.current_dir)
-                        enc_path = encrypt(SESSION_KEY, self.current_dir, False)
+                        print('\n' + filename, " successfully uploaded to", self.current_dir + '\n')
+                        enc_path = encrypt(SESSION_KEY, os.path.join(self.current_dir, filename), False)
                         _ = master.notify_all_clients(self.id, enc_path)
                     else:
-                        print("Error occurred during FTP")
-
+                        print("\nError occurred during FTP\n")
                 elif command[0] == 'cp':
                     if len(command) < 3:
-                        print('usage: cp <path-of-file-to-copy> <destination-path>')
+                        print('\nusage: cp <path-of-file-to-copy> <destination-path>\n')
                     else:
                         source = command[1]
                         if source[0] != '/':
                             source = os.path.join(self.current_dir, source)
                         source = parse_dir(source)
                         if source == -1:
-                            print('Enter Valid Source Path')
+                            print('\nEnter Valid Source Path\n')
                             continue
-                        
                         destination = command[2]
                         if destination[0] != '/':
                             destination = os.path.join(self.current_dir, destination)
                         destination = parse_dir(destination)
                         if destination == -1:
-                            print('Enter Valid Destination Path')
+                            print('\nEnter Valid Destination Path\n')
                             continue
-                            
                         enc_paths = encrypt_obj((source, destination), SESSION_KEY, False)
                         enc_ftp_creds = master.get_cp_ftp_creds(self.id, enc_paths)
-                        if enc_ftp_creds == False:
-                            print('Source/Destination Paths invalid.')
+                        if not enc_ftp_creds:
+                            print('\nSource or Destination Path invalid.\n')
                             continue
-
                         ip_source, port_source, ip_dest, port_dest = decrypt_obj(enc_ftp_creds, SESSION_KEY, False)
                         ftp_result = self.do_ftp(ip_dest, port_dest, destination, 1, (ip_source, port_source, source))
                         if ftp_result == -1:
-                            print('Server Error During Copying...Try again later')
+                            print('\nServer Error During Copying...Try again later\n')
                         else:
-                            print('Succesfully copyied file to', destination)
+                            print('\nSuccesfully copied file to', destination + '\n')
                 elif command[0] == 'download':
                     if len(command) == 1:
                         print("\ndownload requires an argument -- the file to display\n")
@@ -284,25 +299,22 @@ class DSClient:
                             file_path = os.path.join(self.current_dir, file_path)
                         parsed_path = parse_dir(file_path)
                         if parsed_path == -1:
-                            print("Path not valid")
+                            print("\nPath not valid\n")
                             continue
                         enc_path = encrypt(SESSION_KEY, parsed_path, False)
                         file_exists = master.cat_file(self.id, enc_path)
                         if not file_exists:
-                            print("Given path is not a file")
-                        elif file_exists == -1:
-                            print("No such file exists")
+                            print("\nNo such file exists\n")
                         elif file_exists == -2:
-                            print("Node not registered with Server")
+                            print("\nNode not registered with Server\n")
                         else:
                             dec_obj = decrypt_obj(file_exists, SESSION_KEY, False)
                             ftp_ip, ftp_port = dec_obj
-                            display_contents = self.do_ftp(ftp_ip, ftp_port, file_path, 3)
+                            display_contents = self.do_ftp(ftp_ip, ftp_port, file_path, 4)
                             if display_contents != -1:
-                                print("File Download Successful!")
+                                print("\nFile Download Successful!\n")
                             else:
-                                print("Error occurred during FTP")
-
+                                print("\nError occurred during FTP\n")
                 elif command[0] == 'mkdir':
                     if len(command) < 2:
                         print("\nmkdir requires an argument -- the folder to create\n")
@@ -312,19 +324,18 @@ class DSClient:
                             folder_name = os.path.join(self.current_dir, folder_name)
                         parsed_path = parse_dir(folder_name)
                         if parsed_path == -1:
-                            print("Invalid Name")
+                            print("\nInvalid Name\n")
                             continue
                         enc_folder = encrypt(SESSION_KEY, parsed_path, False)
                         enc_ret = master.mkdir(self.id, enc_folder)
                         dec_ret = decrypt(SESSION_KEY, enc_ret, False)
                         if dec_ret == "True":
-                            print("Folder created successfully")
+                            print("\nFolder created successfully\n")
                         else:
-                            print("Unable to create folder")
-
+                            print("\nUnable to create folder\n")
                 elif command[0] == 'delete':
                     if len(command) < 2:
-                        print("Usage: delete <path_to_file>")
+                        print("\nUsage: delete <path_to_file>\n")
                         continue
                     else:
                         file_path = command[1]
@@ -334,14 +345,41 @@ class DSClient:
                         enc_path = encrypt(SESSION_KEY, file_path, False)
                         ret = master.delete_file(self.id, enc_path)
                         if ret != False:
-                            print('Deleted Successfully!')
+                            print('\nDeleted Successfully!\n')
                         else:
-                            print('Enter Valid File Path')
-                
+                            print('\nEnter Valid File Path\n')
                 elif command[0] == "clear":
                     os.system('clear')
+                elif command[0] == "help":
+                    print("\nThe Following commands are available: -\n")
+                    print("pwd: List the present working directory")
+                    print("args: none\n")
+                    print("ls: Lists the contents of current directory")
+                    print("args: none\n")
+                    print("cp: copy one file to another")
+                    print("args: <path-of-file-to-copy> <destination-path>\n")
+                    print("cat: display contents of a file")
+                    print("args: <path-of-file-to-show>\n")
+                    print("cd: change current directory")
+                    print("args: <directory-to-change-to>\n")
+                    print("download: download a file")
+                    print("args: <path-of-file-to-download>\n")
+                    print("upload: upload a file")
+                    print("args: none\n")
+                    print("mkdir: create a directory")
+                    print("args: <name-of-directory-to-create>\n")
+                    print("delete: delete a file")
+                    print("args: <path-of-file-to-delete>\n")
+                    print("clear: clear console")
+                    print("args: none\n")
+                    print("exit: exit the program")
+                    print("args: none\n")
+                    print("help: show help")
+                    print("args: none\n")
+                elif command[0] == 'exit':
+                    break
             else:
-                print("Please enter a valid command")
+                print("\nPlease enter a valid command\n")
 
 
 if __name__ == "__main__":
@@ -350,7 +388,7 @@ if __name__ == "__main__":
     port = int(input("Enter port: "))
     while is_port_in_use(port):
         port = int(input("Port already in use. Please enter another: "))
-        
+
     node = Node(id, pwd, "ds", port=port)
     t1 = ThreadedServer(DSListener, hostname="127.0.0.1", port=port, protocol_config={'allow_public_attrs': True})
     t2 = DSClient(id, pwd)
@@ -364,5 +402,6 @@ if __name__ == "__main__":
         node.ID = id
         node.PWD = pwd
         isConnect = node.connect_to_master()
+    IS_WAITING = True
     SESSION_KEY = node.session_key
     t2.start()

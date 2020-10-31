@@ -199,6 +199,7 @@ class MasterServer(rpyc.Service):
                     pass
             
             sorted_file_counts = sorted(file_counts.items(), key=lambda kv: kv[1])
+            print(sorted_file_counts)
             fs = sorted_file_counts[0][0]
             send_path = '/'.join(dec_path.split('/')[:-1])
             if send_path != '':
@@ -304,20 +305,21 @@ class MasterServer(rpyc.Service):
 
             for ds in ds_registry:
                 if ds != node_id:
-                    dcon = rpyc.connect(ds_registry[ds]["ip"], ds_registry[ds]["port"])
-                    message = "new File Uploaded to: " + dec_path
-                    enc_message = encrypt(ds_registry[ds]["key"], message, False)
-                    dcon.root.print(enc_message)
-
-            return True        
+                    try:
+                        dcon = rpyc.connect(ds_registry[ds]["ip"], ds_registry[ds]["port"])
+                        message = "new File Uploaded: " + dec_path + " | by " + node_id
+                        enc_message = encrypt(ds_registry[ds]["key"], message, False)
+                        dcon.root.print(enc_message)
+                    except:
+                        pass
+            return True
 
         @staticmethod
         def delete_file(node_id, enc_path):
             if node_id not in ds_registry:
                 return -2
             session_key = ds_registry[node_id]["key"]
-            dec_path = decrypt(session_key, enc_path, False) 
-
+            dec_path = decrypt(session_key, enc_path, False)
             for fs in fs_registry:
                 send_path = encrypt(fs_registry[fs]["key"], dec_path, False)
                 try:
