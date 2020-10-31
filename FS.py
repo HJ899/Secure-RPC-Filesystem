@@ -6,6 +6,7 @@ from Node import Node
 import socket
 import FTPServer
 from multiprocessing import Process
+import getpass
 
 SESSION_KEY = None
 ROOT_PATH = None
@@ -29,6 +30,15 @@ class FSServer(rpyc.Service):
                 dirnames.extend(dnames)
                 break
             return encrypt_obj((filenames, dirnames), SESSION_KEY, False)
+
+        @staticmethod
+        def mkdir(enc_dir):
+            dec_dir = decrypt(SESSION_KEY, enc_dir, False)
+            if dec_dir[0] == '/':
+                dec_dir = dec_dir[1:]
+            dir_path = os.path.join(ROOT_PATH, dec_dir)
+            os.makedirs(dir_path)
+            return encrypt(SESSION_KEY, "True", False)
 
         @staticmethod
         def dir_exists(enc_dir):
