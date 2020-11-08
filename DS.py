@@ -83,12 +83,12 @@ def upload_ftp_file(ftp: ftplib.FTP, file_path, current_dir):
         print(error)
         return -1
 
-def cp_ftp_file(ftp_source: ftplib.FTP, source_path, ftp_dest: ftplib.FTP, dest_path):
+def cp_ftp_file(ftp_source: ftplib.FTP, source_path, ftp_dest: ftplib.FTP, dest_path, new_file_name):
     temp = tempfile.TemporaryFile()
     try:
         ftp_source.retrbinary("RETR " + source_path[1:], temp.write, 1024)
         temp.seek(0)
-        write_dir = os.path.join(dest_path[1:], source_path.split('/')[-1])
+        write_dir = os.path.join(dest_path[1:], new_file_name)
         ftp_dest.storbinary("STOR " + write_dir, temp)
         temp.close()
         return 200
@@ -141,7 +141,7 @@ class DSClient:
                     ftp_source = ftplib.FTP('')
                     ftp_source.connect(args[0], args[1])
                     ftp_source.login(self.id, self.pwd)
-                result = cp_ftp_file(ftp_source, args[2], ftp, file_path)
+                result = cp_ftp_file(ftp_source, args[2], ftp, file_path, args[3])
                 if result == -1:
                     return -1
                 return 200
@@ -245,6 +245,9 @@ class DSClient:
                     IS_WAITING = True
                     WAITING_TEXT = 'Enter file name to upload to current directory - ' + self.current_dir + ' : '
                     filename = input('Enter file name to upload to current directory - ' + self.current_dir + ' : ')
+                    if filename == 'clear' or filename == 'exit' or filename == 'quit':
+                        continue
+                    
                     while filename not in client_files:
                         WAITING_TEXT = 'File not found, please enter a valid file name: '
                         filename = input('File not found, please enter a valid file name: ')
@@ -284,8 +287,8 @@ class DSClient:
                         if not enc_ftp_creds:
                             print('\nSource or Destination Path invalid.\n')
                             continue
-                        ip_source, port_source, ip_dest, port_dest = decrypt_obj(enc_ftp_creds, SESSION_KEY, False)
-                        ftp_result = self.do_ftp(ip_dest, port_dest, destination, 1, (ip_source, port_source, source))
+                        ip_source, port_source, ip_dest, port_dest, new_file_name = decrypt_obj(enc_ftp_creds, SESSION_KEY, False)
+                        ftp_result = self.do_ftp(ip_dest, port_dest, destination, 1, (ip_source, port_source, source, new_file_name))
                         if ftp_result == -1:
                             print('\nServer Error During Copying...Try again later\n')
                         else:

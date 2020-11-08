@@ -225,6 +225,7 @@ class MasterServer(rpyc.Service):
             source_port = None
             dest_ip = None
             dest_port = None
+            new_file_name = None
 
             for fs in fs_registry:
                 send_path = encrypt(fs_registry[fs]["key"], source, False)
@@ -240,12 +241,18 @@ class MasterServer(rpyc.Service):
                 except:
                     pass
             
+            if source_ip == None:
+                return False
+            
             file_name = source.split('/')[-1]
+            new_file_name = file_name
             dest_file_if_exists = os.path.join(dest, file_name)
             file_counts = {}
+            files_in_destination_path = []
 
             for fs in fs_registry:
                 send_path = encrypt(fs_registry[fs]["key"], dest_file_if_exists, False)
+                enc_dest_path = encrypt(fs_registry[fs]["key"], dest, False)
                 try:
                     dcon = rpyc.connect(fs_registry[fs]["ip"], fs_registry[fs]["port"])
                     fs_server = dcon.root.FS()
@@ -254,47 +261,41 @@ class MasterServer(rpyc.Service):
                     file_count = int(decrypt(fs_registry[fs]["key"], enc_file_count, False))
                     file_counts[fs] = file_count
 
-                    enc_file_exists = fs_server.file_exists(send_path)
-                    file_exists = decrypt(fs_registry[fs]["key"], enc_file_exists, False)
-                    if file_exists == "True":
-                        dest_port = int(fs_registry[fs]["port"]) + 1
-                        dest_ip = fs_registry[fs]["ip"]
-                        break
+                    enc_filenames_in_dest = fs_server.dir_list(enc_dest_path)
+                    filenames_in_dest = decrypt_obj(enc_filenames_in_dest, fs_registry[fs]["key"], False)[0]
+                    files_in_destination_path.extend(filenames_in_dest) 
+                    
+                    # enc_file_exists = fs_server.file_exists(send_path)
+                    # file_exists = decrypt(fs_registry[fs]["key"], enc_file_exists, False)
+                    # if file_exists == "True":
+                    #     dest_port = int(fs_registry[fs]["port"]) + 1
+                    #     dest_ip = fs_registry[fs]["ip"]
+                    #     break
                 except:
                     pass
             
             if dest_ip == None:
                 sorted_file_counts = sorted(file_counts.items(), key=lambda kv: kv[1])
                 fs = sorted_file_counts[0][0]
-                if dest != '/':
-                    send_path = encrypt(fs_registry[fs]["key"], dest, False)
-                    try:
-                        dcon = rpyc.connect(fs_registry[fs]["ip"], fs_registry[fs]["port"])
-                        fs_server = dcon.root.FS()
-                        _ = fs_server.mkdir(send_path)
-                    except:
-                        pass
+                send_path = encrypt(fs_registry[fs]["key"], dest, False)
+                try:
+                    dcon = rpyc.connect(fs_registry[fs]["ip"], fs_registry[fs]["port"])
+                    fs_server = dcon.root.FS()
+                    _ = fs_server.mkdir(send_path)
+                except:
+                    pass
                 dest_port = int(fs_registry[fs]["port"]) + 1
                 dest_ip = fs_registry[fs]["ip"]
+            
+            if new_file_name in files_in_destination_path:
+                f_name = '.'.join(new_file_name.split('.')[:-1])
+                ext = '.' + new_file_name.split('.')[-1]
+                for i in range(1,10000):
+                    if f_name + '_copy_' + str(i) + ext not in files_in_destination_path:
+                        new_file_name = f_name + '_copy_' + str(i) + ext
+                        break
 
-            # for fs in fs_registry:
-            #     send_path = encrypt(fs_registry[fs]["key"], dest_file_if_exists, False)
-            #     try:
-            #         dcon = rpyc.connect(fs_registry[fs]["ip"], fs_registry[fs]["port"])
-            #         fs_server = dcon.root.FS()
-            #         enc_path_exists = fs_server.dir_exists(send_path)
-            #         dec_exists = decrypt(fs_registry[fs]["key"], enc_path_exists, False)
-            #         if dec_exists == "True":
-            #             dest_port = int(fs_registry[fs]["port"]) + 1
-            #             dest_ip = fs_registry[fs]["ip"]
-            #             break
-            #     except:
-            #         pass
-            
-            if source_ip == None or dest_ip == None:
-                return False
-            
-            return encrypt_obj((source_ip, source_port, dest_ip, dest_port), session_key, False)
+            return encrypt_obj((source_ip, source_port, dest_ip, dest_port, new_file_name), session_key, False)
 
         @staticmethod
         def notify_all_clients(node_id, enc_path):
