@@ -109,6 +109,8 @@ class MasterServer(rpyc.Service):
                     pass
             filenames = list(set(filenames))
             dirnames = list(set(dirnames))
+            filenames.sort()
+            dirnames.sort()
             return encrypt_obj((filenames, dirnames), session_key, False)
 
         @staticmethod
