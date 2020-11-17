@@ -247,6 +247,8 @@ class DSClient:
                     filename = input('Enter file name to upload to current directory - ' + self.current_dir + ' : ')
                     if filename == 'clear' or filename == 'exit' or filename == 'quit':
                         print()
+                        IS_WAITING = False
+                        WAITING_TEXT = None
                         continue
                     
                     while filename not in client_files:
